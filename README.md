@@ -1,0 +1,1 @@
+# AXI4-Lite Peripheral Generator A project to generate AXI4-Lite compliant peripherals in SystemVerilog
