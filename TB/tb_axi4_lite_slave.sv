@@ -1,19 +1,14 @@
 // =============================================================
-// tb_axi4_lite_slave.sv
-// Simple directed testbench: write to reg0, then read it back
+// tb_axi4_lite_slave.sv - DEBUG VERSION with extra checkpoints
 // =============================================================
 
 `timescale 1ns/1ps
 
 module tb_axi4_lite_slave;
 
-    // ------------------------------------------------------------
-    // Clock & reset
-    // ------------------------------------------------------------
     logic ACLK;
     logic ARESETn;
 
-    // AXI signals
     logic [3:0]  AWADDR;
     logic        AWVALID;
     logic        AWREADY;
@@ -36,9 +31,6 @@ module tb_axi4_lite_slave;
     logic        RVALID;
     logic        RREADY;
 
-    // ------------------------------------------------------------
-    // Instantiate DUT (Device Under Test)
-    // ------------------------------------------------------------
     axi4_lite_slave dut (
         .ACLK(ACLK), .ARESETn(ARESETn),
         .AWADDR(AWADDR), .AWVALID(AWVALID), .AWREADY(AWREADY),
@@ -48,21 +40,13 @@ module tb_axi4_lite_slave;
         .RDATA(RDATA), .RRESP(RRESP), .RVALID(RVALID), .RREADY(RREADY)
     );
 
-    // ------------------------------------------------------------
-    // Clock generation: 10ns period (100MHz)
-    // ------------------------------------------------------------
     initial ACLK = 0;
     always #5 ACLK = ~ACLK;
 
-    // ------------------------------------------------------------
-    // Test sequence
-    // ------------------------------------------------------------
     initial begin
-        // Dump waveform for viewing in GTKWave / similar
         $dumpfile("tb_axi4_lite_slave.vcd");
         $dumpvars(0, tb_axi4_lite_slave);
 
-        // Initialize all signals
         ARESETn = 0;
         AWADDR  = 0; AWVALID = 0;
         WDATA   = 0; WSTRB   = 0; WVALID = 0;
@@ -70,45 +54,43 @@ module tb_axi4_lite_slave;
         ARADDR  = 0; ARVALID = 0;
         RREADY  = 0;
 
-        // Hold reset for a few cycles
         repeat (3) @(posedge ACLK);
-        ARESETn = 1;
+        ARESETn <= 1;
         @(posedge ACLK);
+        $display("[TB][t=%0t] Reset released", $time);
 
-        // ---------------- WRITE to reg0 ----------------
-        $display("[TB] Writing 32'hDEADBEEF to reg0 (addr 0x0)");
-        AWADDR  = 4'h0;
-        AWVALID = 1;
-        WDATA   = 32'hDEADBEEF;
-        WSTRB   = 4'hF;      // write all 4 bytes
-        WVALID  = 1;
-        BREADY  = 1;
+        $display("[TB][t=%0t] Writing 32'hDEADBEEF to reg0", $time);
+        AWADDR  <= 4'h0;
+        AWVALID <= 1;
+        WDATA   <= 32'hDEADBEEF;
+        WSTRB   <= 4'hF;
+        WVALID  <= 1;
+        BREADY  <= 1;
 
-        // Wait until the slave accepts both address and data
         wait (AWREADY && WREADY);
+        $display("[TB][t=%0t] Address+Data accepted (AWREADY=%0b WREADY=%0b)", $time, AWREADY, WREADY);
         @(posedge ACLK);
-        AWVALID = 0;
-        WVALID  = 0;
+        AWVALID <= 0;
+        WVALID  <= 0;
 
-        // Wait for write response
+        $display("[TB][t=%0t] Waiting for BVALID...", $time);
         wait (BVALID);
+        $display("[TB][t=%0t] BVALID seen! BRESP=%0d", $time, BRESP);
         @(posedge ACLK);
-        if (BRESP == 2'b00)
-            $display("[TB] Write response OKAY");
-        else
-            $display("[TB] ERROR: Unexpected write response %0d", BRESP);
+        BREADY <= 0;
 
-        // ---------------- READ back reg0 ----------------
-        $display("[TB] Reading back reg0 (addr 0x0)");
-        ARADDR  = 4'h0;
-        ARVALID = 1;
-        RREADY  = 1;
+        $display("[TB][t=%0t] Reading back reg0", $time);
+        ARADDR  <= 4'h0;
+        ARVALID <= 1;
+        RREADY  <= 1;
 
         wait (ARREADY);
+        $display("[TB][t=%0t] Read address accepted", $time);
         @(posedge ACLK);
-        ARVALID = 0;
+        ARVALID <= 0;
 
         wait (RVALID);
+        $display("[TB][t=%0t] RVALID seen! RDATA=0x%h", $time, RDATA);
         @(posedge ACLK);
 
         if (RDATA == 32'hDEADBEEF)
@@ -118,6 +100,12 @@ module tb_axi4_lite_slave;
 
         repeat (5) @(posedge ACLK);
         $display("[TB] Test complete.");
+        $finish;
+    end
+
+    initial begin
+        #2000;
+        $display("[TB] TIMEOUT at t=%0t - simulation did not finish in time.", $time);
         $finish;
     end
 
